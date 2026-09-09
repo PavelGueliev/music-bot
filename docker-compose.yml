@@ -7,6 +7,10 @@ services:
       - .env
     volumes:
       - ./data:/app/data
+      # Раскомментируй, если используешь YTDLP_COOKIES_FILE (см. .env.example) —
+      # положи экспортированный cookies.txt в ./secrets/ и укажи в .env
+      # YTDLP_COOKIES_FILE=/app/secrets/cookies.txt
+      # - ./secrets/cookies.txt:/app/secrets/cookies.txt:ro
     # Жёстко ограничиваем 1 ядром/512МБ — так сразу видно на реальном железе,
     # что бот укладывается в целевой бюджет, а не "работает, пока есть запас".
     # cpus/mem_limit — для `docker compose up` вне Swarm; deploy.resources — на случай Swarm/новых Compose V2.

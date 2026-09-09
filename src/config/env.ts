@@ -17,6 +17,10 @@ const envSchema = z.object({
 
   YTDLP_PATH: z.string().default("yt-dlp"),
   FFMPEG_PATH: z.string().default("ffmpeg"),
+  // Путь к cookies.txt (формат Netscape) от залогиненного YouTube-аккаунта —
+  // нужен только для видео с возрастным ограничением, которые YouTube
+  // отказывается отдавать анонимно. Опционально, без него всё остальное работает как раньше.
+  YTDLP_COOKIES_FILE: z.string().optional(),
 
   DATABASE_PATH: z.string().default("./data/musicbot.db"),
 

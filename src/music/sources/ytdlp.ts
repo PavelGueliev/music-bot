@@ -29,11 +29,18 @@ interface YtDlpFullInfo extends YtDlpFlatEntry {
   entries?: YtDlpFlatEntry[];
 }
 
+// Добавляется в КАЖДЫЙ вызов yt-dlp автоматически (не в отдельных функциях
+// ниже), чтобы ни один вызов случайно не забыл про куки — иначе поведение
+// "то работает, то нет" на возрастных видео было бы трудно отследить.
+function withCookies(args: string[]): string[] {
+  return env.YTDLP_COOKIES_FILE ? ["--cookies", env.YTDLP_COOKIES_FILE, ...args] : args;
+}
+
 function run(args: string[], timeoutMs: number): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(
       env.YTDLP_PATH,
-      args,
+      withCookies(args),
       { timeout: timeoutMs, maxBuffer: MAX_BUFFER, killSignal: "SIGKILL" },
       (error: ExecFileException | null, stdout, stderr) => {
         if (error) {

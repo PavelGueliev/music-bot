@@ -6,6 +6,8 @@ data/
 *.db-wal
 *.db-shm
 .env
+secrets/
+cookies.txt
 npm-debug.log*
 *.log
 .DS_Store

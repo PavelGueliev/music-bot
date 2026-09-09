@@ -56,7 +56,7 @@ QueueManager.getOrCreate(guildId) ──► GuildPlayer (music/GuildPlayer.ts)
 - [AudioPipeline.ts](src/music/AudioPipeline.ts) — на входе `Track`, на выходе `AudioResource` + `destroy()`. Резолвит прямой URL через yt-dlp, спавнит ffmpeg, который читает этот URL напрямую по HTTP (без второго процесса и без временных файлов) и отдаёт raw PCM → `@discordjs/voice` сам кодирует в Opus нативно.
 - [resolveQuery.ts](src/music/resolveQuery.ts) — единая точка входа для "текст/ссылка → `Track[]`", используется и в `/play`, и в `/playlist add`. Разруливает 3 кейса: URL YouTube, URL Spotify (через `sources/spotify.ts`), обычный текст (поиск + LRU-кэш).
 - [types.ts](src/music/types.ts) — `Track`, `LoopMode`, `ResolvedStream`. Если меняешь форму `Track` — задеваешь репозитории (`db/repositories/*`) и `ui/embeds.ts`.
-- `sources/ytdlp.ts` — весь контакт с бинарником `yt-dlp` (search / resolveFromUrl / resolveStreamUrl), каждый вызов с жёстким таймаутом (`execFile`), чтобы битое видео не подвесило бота.
+- `sources/ytdlp.ts` — весь контакт с бинарником `yt-dlp` (search / resolveFromUrl / resolveStreamUrl), каждый вызов с жёстким таймаутом (`execFile`), чтобы битое видео не подвесило бота. `withCookies()` автоматически добавляет `--cookies $YTDLP_COOKIES_FILE` во все вызовы, если переменная задана (нужно для возрастных видео) — не забыть про неё при добавлении новых вызовов yt-dlp.
 - `sources/spotify.ts` — Client Credentials flow к Spotify Web API, **только метаданные**, аудио не отдаёт (см. врезку в README, почему). Возвращает поисковые строки, которые дальше ищутся на YouTube.
 - `cache/searchCache.ts` — LRU (10 мин, 300 записей) для результатов текстового поиска.
 
