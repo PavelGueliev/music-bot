@@ -4,7 +4,7 @@ Discord-бот с функциями в духе Spotify (поиск/очере�
 история/тексты песен). Ключевое ограничение проекта: **работает на 1 ядре
 CPU и не должен зависать** — почти все решения ниже продиктованы этим.
 
-Стек: Node.js 20+ / TypeScript (ESM, `NodeNext`), discord.js v14,
+Стек: Node.js 22+ / TypeScript (ESM, `NodeNext`), discord.js v14,
 `@discordjs/voice`, `better-sqlite3`, реальный звук — YouTube через
 `yt-dlp` + `ffmpeg` (см. "Почему так" в [README.md](README.md), там же —
 пошаговый запуск через Docker/локально).
@@ -110,6 +110,7 @@ QueueManager.getOrCreate(guildId) ──► GuildPlayer (music/GuildPlayer.ts)
 - **`GuildPlayer.textChannelId`** обновляется последней командой, которая трогала плеер (`/play`, `/playlist load`) — именно туда летят автопосты "сейчас играет"/ошибка трека. Если трек стартует, а `textChannelId` ещё не проставлен (гипотетически) — пост просто не отправится, тихо.
 - **`QueueManager` эмитит `"created"` только один раз на гильдию** — вся общая обвязка плеера (история, автопосты) вешается в `client.ts` через эту подписку. Если создавать `GuildPlayer` напрямую (в обход `QueueManager.getOrCreate`) — обвязка не сработает.
 - **`schema.sql` не копируется TS-компилятором** — см. `build`-скрипт в `package.json`.
+- **Версия Node в `Dockerfile` должна совпадать с требованиями зависимостей** (`engines` в `package.json`, warnings `EBADENGINE` при `npm ci`). Реальный инцидент: `better-sqlite3@13`/`@discordjs/voice@0.19` требуют Node ≥22, а образ был на Node 20 — нативный биндинг собрался без явной ошибки, но крашил рантайм сегфолтом при старте (`docker logs` при этом пустой — крашится до первого лога). При апгрейде major-версии любого пакета с нативными бинарниками — сверяй `engines` и синхронизируй `FROM node:X` во всех стадиях `Dockerfile`.
 
 ## Опциональные интеграции и деградация
 
