@@ -1,0 +1,41 @@
+{
+  "name": "music-bot",
+  "version": "1.0.0",
+  "description": "Discord music bot with Spotify-like features, optimized for single-core hosts",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json && node -e \"require('fs').copyFileSync('src/db/schema.sql','dist/db/schema.sql')\"",
+    "start": "node dist/index.js",
+    "deploy-commands": "tsx scripts/deploy-commands.ts",
+    "typecheck": "tsc --noEmit && tsc -p scripts/tsconfig.json"
+  },
+  "dependencies": {
+    "@discordjs/voice": "^0.19.2",
+    "better-sqlite3": "^13.0.3",
+    "discord.js": "^14.27.0",
+    "@noble/ciphers": "^1.0.0",
+    "dotenv": "^16.4.5",
+    "opusscript": "^0.0.8",
+    "pino": "^9.4.0",
+    "prism-media": "^1.3.5",
+    "quick-lru": "^7.0.0",
+    "zod": "^3.23.8"
+  },
+  "optionalDependencies": {
+    "@discordjs/opus": "^0.10.0",
+    "sodium-native": "^4.3.2"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^20.14.0",
+    "pino-pretty": "^11.2.2",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.3"
+  }
+}

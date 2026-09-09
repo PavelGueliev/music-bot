@@ -1,0 +1,24 @@
+services:
+  music-bot:
+    build: .
+    container_name: music-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    # Жёстко ограничиваем 1 ядром/512МБ — так сразу видно на реальном железе,
+    # что бот укладывается в целевой бюджет, а не "работает, пока есть запас".
+    # cpus/mem_limit — для `docker compose up` вне Swarm; deploy.resources — на случай Swarm/новых Compose V2.
+    cpus: "1.0"
+    mem_limit: 512m
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
