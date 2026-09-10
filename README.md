@@ -107,6 +107,39 @@ SID/HSID/SSID/APISID/SAPISID/LOGIN_INFO), с каждым запуском фа�
 для конкретной страны) куки не лечат — это зависит от IP сервера, а не от
 авторизации.
 
+### Автопродление сессии (`cookie-refresher/`)
+
+Статичный `cookies.txt` протухает сам по себе — Google периодически
+ротирует часть session-токенов как защиту от угона сессии, это никак не
+связано с багами бота. `cookie-refresher/` — отдельный сервис, который по
+расписанию открывает headless-браузер (Playwright + `chromium-headless-shell`,
+урезанная сборка без GUI) с сохранённой сессией, заходит на youtube.com
+(это даёт токенам продлиться, как в обычном браузере) и обновляет и
+`cookies.txt`, и сохранённую сессию. **Не гарантия навечно** — Google может
+всё равно потребовать повторной верификации аккаунта, тогда понадобится
+новый ручной экспорт.
+
+Не демон — не висит постоянно, живёт только секунды самого запуска
+(`profiles: ["cookie-refresh"]` в `docker-compose.yml` — не стартует сам
+через обычный `docker compose up -d`). Расписание — через cron на хосте:
+
+```bash
+# раз в 4 часа
+crontab -e
+0 */4 * * * cd /root/apps/music-bot && docker compose --profile cookie-refresh run --rm cookie-refresher >> /root/cookie-refresh.log 2>&1
+```
+
+**Разовая настройка (без установки чего-либо тяжёлого у себя):**
+1. Экспортируй `cookies.txt` как обычно (расширением "Get cookies.txt LOCALLY").
+2. Сконвертируй в формат сессии Playwright — чистый Node, без Playwright/Chromium:
+   ```bash
+   node scripts/cookies-to-storagestate.mjs cookies.txt storageState.json
+   ```
+3. Положи `storageState.json` в `./secrets/` рядом с `cookies.txt` на сервере.
+
+Если увидишь в `cookie-refresh.log` "Сессия разлогинена" — автопродление
+больше не работает, нужен новый ручной экспорт с шага 1.
+
 ## Опциональные интеграции
 
 - **Spotify** (`/play <ссылка spotify.com>`, `/playlist add` со ссылкой):

@@ -8,6 +8,8 @@ data/
 .env
 secrets/
 cookies.txt
+storageState.json
+storageState.meta.json
 npm-debug.log*
 *.log
 .DS_Store

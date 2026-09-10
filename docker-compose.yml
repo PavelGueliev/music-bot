@@ -38,3 +38,24 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  # Продлевает YouTube-сессию по расписанию (cron на хосте, см. CLAUDE.md) —
+  # НЕ демон, не запускается сам по себе через `docker compose up -d`
+  # благодаря profiles: только явным `docker compose --profile cookie-refresh
+  # run --rm cookie-refresher`. Между запусками — ноль потребления памяти,
+  # headless-браузер живёт лишь секунды самого прогона.
+  cookie-refresher:
+    build: ./cookie-refresher
+    profiles: ["cookie-refresh"]
+    environment:
+      - STORAGE_STATE_PATH=/data/storageState.json
+      - COOKIES_OUT_PATH=/data/cookies.txt
+    volumes:
+      - ./secrets:/data
+    mem_limit: 400m
+    cpus: "1.0"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"

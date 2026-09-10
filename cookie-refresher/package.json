@@ -1,0 +1,9 @@
+{
+  "name": "cookie-refresher",
+  "private": true,
+  "type": "module",
+  "description": "Периодически продлевает YouTube-сессию (headless-браузер + сохранённое состояние) и обновляет cookies.txt для бота — вместо ручного переэкспорта.",
+  "dependencies": {
+    "playwright": "^1.48.0"
+  }
+}
