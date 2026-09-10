@@ -4,7 +4,13 @@ import type { LoopMode, Track } from "../music/types.js";
 
 const COLOR = 0x1db954; // спотифай-зелёный, чисто эстетика
 
-export function nowPlayingEmbed(track: Track, loopMode: LoopMode, volume: number, queueLength: number): EmbedBuilder {
+export function nowPlayingEmbed(
+  track: Track,
+  loopMode: LoopMode,
+  volume: number,
+  queueLength: number,
+  autoplay = false
+): EmbedBuilder {
   return new EmbedBuilder()
     .setColor(COLOR)
     .setAuthor({ name: "Сейчас играет" })
@@ -15,7 +21,8 @@ export function nowPlayingEmbed(track: Track, loopMode: LoopMode, volume: number
     .addFields(
       { name: "Повтор", value: loopLabel(loopMode), inline: true },
       { name: "Громкость", value: `${Math.round(volume * 100)}%`, inline: true },
-      { name: "В очереди", value: String(queueLength), inline: true }
+      { name: "В очереди", value: String(queueLength), inline: true },
+      { name: "Автоплей", value: autoplay ? "🔮 Вкл." : "Выкл.", inline: true }
     )
     .setFooter(track.requestedBy ? { text: `Добавил: ${track.requestedBy}` } : null);
 }

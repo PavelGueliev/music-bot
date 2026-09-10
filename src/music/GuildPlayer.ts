@@ -13,6 +13,7 @@ import type { VoiceBasedChannel } from "discord.js";
 import { env } from "../config/env.js";
 import { childLogger } from "../utils/logger.js";
 import { createPlayback, type PlaybackHandle } from "./AudioPipeline.js";
+import { getRelatedTracks } from "./sources/ytdlp.js";
 import type { LoopMode, Track } from "./types.js";
 
 const logger = childLogger("guild-player");
@@ -42,6 +43,8 @@ export class GuildPlayer extends EventEmitter {
   history: Track[] = [];
   loopMode: LoopMode = "off";
   volume = env.DEFAULT_VOLUME / 100;
+  /** Автоплей: когда очередь заканчивается, сам подбираем похожие треки (YouTube Mix) — аналог радио в Spotify. */
+  autoplay = false;
 
   private skipRequested = false;
   private idleTimer: NodeJS.Timeout | null = null;
@@ -148,7 +151,28 @@ export class GuildPlayer extends EventEmitter {
       }
     }
 
+    // Автоплей подбирает следующую порцию от ПОСЛЕДНЕГО реально сыгранного
+    // трека (а не от исходного семени плейлиста) — так подборка естественно
+    // "дрейфует" по смыслу вслед за тем, что действительно звучало, как
+    // радио в Spotify, а не залипает на одной теме навсегда.
+    if (this.autoplay && this.queue.length === 0 && finished) {
+      await this.fetchAutoplayTracks(finished);
+    }
+
     await this.playNext();
+  }
+
+  private async fetchAutoplayTracks(seed: Track): Promise<void> {
+    try {
+      const related = await getRelatedTracks(seed.url, 5);
+      // Пока ждали сеть, могли выключить автоплей или уже добавить треки
+      // вручную — не подмешиваем автоплей задним числом поверх этого.
+      if (!this.autoplay || this.queue.length > 0 || related.length === 0) return;
+      this.queue.push(...related.map((t) => ({ ...t, requestedBy: "🔮 Автоплей" })));
+      logger.debug({ guildId: this.guildId, count: related.length, seed: seed.title }, "Автоплей добавил треки");
+    } catch (error) {
+      logger.warn({ error, guildId: this.guildId, seed: seed.title }, "Автоплей: не удалось подобрать треки");
+    }
   }
 
   skip(): void {
@@ -175,6 +199,10 @@ export class GuildPlayer extends EventEmitter {
 
   setLoop(mode: LoopMode): void {
     this.loopMode = mode;
+  }
+
+  setAutoplay(enabled: boolean): void {
+    this.autoplay = enabled;
   }
 
   shuffle(): void {

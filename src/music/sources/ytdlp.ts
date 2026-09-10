@@ -155,3 +155,55 @@ export async function resolveStreamUrl(url: string): Promise<ResolvedStream> {
     headers: chosen.http_headers ?? info.http_headers ?? {},
   };
 }
+
+function extractVideoId(url: string): string | null {
+  try {
+    return new URL(url).searchParams.get("v");
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Автоплей: вместо своей системы рекомендаций используем готовый YouTube
+ * Mix (`RD<videoId>`) — тот же алгоритм, на котором построено автовоспроиз-
+ * ведение самого YouTube. Первый элемент микса обычно совпадает с исходным
+ * видео — его пропускаем, чтобы не повторяться. --playlist-end ограничивает
+ * выборку: миксы могут быть практически бесконечными, тянуть всё не нужно —
+ * следующая порция подбирается заново от последнего реально сыгранного трека.
+ */
+export async function getRelatedTracks(seedUrl: string, limit = 5): Promise<Track[]> {
+  const videoId = extractVideoId(seedUrl);
+  if (!videoId) return [];
+
+  const mixUrl = `https://www.youtube.com/watch?v=${videoId}&list=RD${videoId}`;
+  try {
+    const stdout = await run(
+      [
+        "--flat-playlist",
+        "--dump-json",
+        "--no-warnings",
+        "--skip-download",
+        "--playlist-end",
+        String(limit + 1),
+        mixUrl,
+      ],
+      RESOLVE_TIMEOUT_MS
+    );
+
+    const tracks: Track[] = [];
+    for (const line of stdout.split("\n").filter(Boolean)) {
+      try {
+        const entry = JSON.parse(line) as YtDlpFlatEntry;
+        if (entry.id === videoId) continue; // сам исходный трек — уже играл
+        tracks.push(toTrack(entry));
+      } catch {
+        // пропускаем битую строку, не роняем весь автоплей
+      }
+    }
+    return tracks.slice(0, limit);
+  } catch (error) {
+    logger.warn({ error, seedUrl }, "Автоплей: не удалось получить YouTube Mix");
+    return [];
+  }
+}

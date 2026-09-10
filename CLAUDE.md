@@ -56,7 +56,7 @@ QueueManager.getOrCreate(guildId) ──► GuildPlayer (music/GuildPlayer.ts)
 - [AudioPipeline.ts](src/music/AudioPipeline.ts) — на входе `Track`, на выходе `AudioResource` + `destroy()`. Резолвит прямой URL через yt-dlp, спавнит ffmpeg, который читает этот URL напрямую по HTTP (без второго процесса и без временных файлов) и отдаёт raw PCM → `@discordjs/voice` сам кодирует в Opus нативно.
 - [resolveQuery.ts](src/music/resolveQuery.ts) — единая точка входа для "текст/ссылка → `Track[]`", используется и в `/play`, и в `/playlist add`. Разруливает 3 кейса: URL YouTube, URL Spotify (через `sources/spotify.ts`), обычный текст (поиск + LRU-кэш).
 - [types.ts](src/music/types.ts) — `Track`, `LoopMode`, `ResolvedStream`. Если меняешь форму `Track` — задеваешь репозитории (`db/repositories/*`) и `ui/embeds.ts`.
-- `sources/ytdlp.ts` — весь контакт с бинарником `yt-dlp` (search / resolveFromUrl / resolveStreamUrl), каждый вызов с жёстким таймаутом (`execFile`), чтобы битое видео не подвесило бота. `withCookies()` автоматически добавляет `--cookies $YTDLP_COOKIES_FILE` во все вызовы, если переменная задана (нужно для возрастных видео) — не забыть про неё при добавлении новых вызовов yt-dlp.
+- `sources/ytdlp.ts` — весь контакт с бинарником `yt-dlp` (search / resolveFromUrl / resolveStreamUrl / getRelatedTracks), каждый вызов с жёстким таймаутом (`execFile`), чтобы битое видео не подвесило бота. `withDefaultArgs()` автоматически добавляет `--js-runtimes node` (всегда) и `--cookies $YTDLP_COOKIES_FILE` (если переменная задана) во ВСЕ вызовы — не обходить эту обёртку при добавлении новых вызовов yt-dlp, иначе поймаешь либо "page needs to be reloaded", либо "то работает, то нет" на возрастных видео. `getRelatedTracks()` — YouTube Mix (`RD<videoId>`) для автоплея, см. ниже.
 - `sources/spotify.ts` — Client Credentials flow к Spotify Web API, **только метаданные**, аудио не отдаёт (см. врезку в README, почему). Возвращает поисковые строки, которые дальше ищутся на YouTube.
 - `cache/searchCache.ts` — LRU (10 мин, 300 записей) для результатов текстового поиска.
 
@@ -83,6 +83,7 @@ QueueManager.getOrCreate(guildId) ──► GuildPlayer (music/GuildPlayer.ts)
 | `/favorite add\|remove\|list` | favorite.ts | избранное (привязано к текущему играющему треку) |
 | `/history` | history.ts | последние 10 треков на сервере |
 | `/lyrics` | lyrics.ts | превью текста (не полный, из-за авторских прав) + ссылка на Genius |
+| `/autoplay on\|off` | autoplay.ts | вкл/выкл автоплей на плеере гильдии (см. "Автоплей" ниже) |
 
 ### Прочее
 - `src/services/lyrics.ts` — Genius: поиск метаданных через официальный API + best-effort парсинг превью текста прямо со страницы (регэксп по `data-lyrics-container`, может сломаться при редизайне Genius — это единственное действительно хрупкое место в проекте).
@@ -99,9 +100,34 @@ QueueManager.getOrCreate(guildId) ──► GuildPlayer (music/GuildPlayer.ts)
    - `loop: track` + НЕ ручной skip → трек возвращается в начало очереди;
    - `loop: queue` → трек уходит в конец очереди;
    - иначе — просто уходит в `history` (in-memory, max 20).
-5. Снова `playNext()`. Если очередь пуста — эмит `queueEmpty` + таймер на `destroy()` через `IDLE_LEAVE_MINUTES`.
+5. Если включён `autoplay` и очередь после этого всё ещё пуста — `fetchAutoplayTracks(finished)` подбирает 5 похожих треков (YouTube Mix от только что сыгранного, не от исходного семени) и кладёт их в очередь, прежде чем звать `playNext()`.
+6. Снова `playNext()`. Если очередь пуста (автоплей выключен, или подборка не удалась) — эмит `queueEmpty` + таймер на `destroy()` через `IDLE_LEAVE_MINUTES`.
 
 Если добавляешь новую логику завершения трека (например "не повторять если ошибка") — она идёт в `handleTrackFinished`, а не в обработчик `Idle`/`error` напрямую.
+
+### Автоплей (`GuildPlayer.autoplay` / `/autoplay`)
+
+Вместо своей системы рекомендаций используется готовый **YouTube Mix**
+(`https://www.youtube.com/watch?v=<id>&list=RD<id>`) — тот же алгоритм,
+на котором работает автовоспроизведение самого YouTube, аналог Spotify
+Radio. По умолчанию выключен (`autoplay = false` в конструкторе
+`GuildPlayer`), включается за сессию через `/autoplay on`, сбрасывается
+при `destroy()` (как и `loopMode`/`volume`).
+
+- Подборка берётся заново от **последнего реально сыгранного** трека
+  каждый раз, когда очередь пустеет — а не пагинацией одного и того же
+  микса — так тема "дрейфует" вслед за тем, что звучало, а не залипает.
+- Первый элемент микса обычно совпадает с исходным видео — `getRelatedTracks()`
+  его отфильтровывает по `id`, чтобы не повторять только что сыгранный трек.
+- Сетевой вызов асинхронный (может занять пару секунд) — `fetchAutoplayTracks()`
+  перепроверяет `this.autoplay` и `this.queue.length` уже ПОСЛЕ ответа yt-dlp,
+  на случай если за это время выключили автоплей или добавили треки вручную —
+  не подмешивать результат задним числом.
+- Треки от автоплея помечаются `requestedBy: "🔮 Автоплей"`, `requestedById`
+  не ставится — они намеренно не попадают в `history` (гвард на `requestedById`
+  в `bot/client.ts` уже есть, ничего доп. делать не нужно).
+- Если `getRelatedTracks()` вернул пусто (сеть, миксов нет для этого видео) —
+  тихо ничего не добавляем, дальше идёт обычный путь до идле-дисконнекта.
 
 ## Инварианты, которые легко случайно сломать
 

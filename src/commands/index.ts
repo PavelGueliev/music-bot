@@ -15,6 +15,7 @@ import { playlistCommand } from "./playlist.js";
 import { favoriteCommand } from "./favorite.js";
 import { historyCommand } from "./history.js";
 import { lyricsCommand } from "./lyrics.js";
+import { autoplayCommand } from "./autoplay.js";
 
 export const commandList: Command[] = [
   playCommand,
@@ -32,6 +33,7 @@ export const commandList: Command[] = [
   favoriteCommand,
   historyCommand,
   lyricsCommand,
+  autoplayCommand,
 ];
 
 export function buildCommandCollection(): Collection<string, Command> {
