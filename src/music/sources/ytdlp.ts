@@ -29,26 +29,30 @@ interface YtDlpFullInfo extends YtDlpFlatEntry {
   entries?: YtDlpFlatEntry[];
 }
 
-// Добавляется в КАЖДЫЙ вызов yt-dlp автоматически (не в отдельных функциях
-// ниже), чтобы ни один вызов случайно не забыл про куки — иначе поведение
-// "то работает, то нет" на возрастных видео было бы трудно отследить.
-//
 // --js-runtimes node: YouTube требует решать JS-челлендж подписи формата для
 // залогиненных (по кукам) запросов — без этого флага yt-dlp не находит
 // доступный JS-рантайм (даже при наличии node в PATH) и падает с
-// "The page needs to be reloaded" на КАЖДОМ видео, не только возрастных.
-// Node в образе есть всегда (это рантайм самого бота), так что флаг
-// безопасно включать всегда, даже без кук — вреда не будет.
-function withDefaultArgs(args: string[]): string[] {
+// "The page needs to be reloaded". Node в образе есть всегда (это рантайм
+// самого бота), безопасно включать всегда, даже без кук — вреда не будет.
+//
+// --cookies — НАМЕРЕННО не на каждый вызов, а только там, где явно передан
+// useCookies=true (см. resolveStreamUrl). Реальный инцидент: включили их
+// глобально — и поиск/автоплей стали тихо возвращать 0 результатов для
+// explicit-контента ("ничего не найдено", EXIT 0, без единой ошибки) —
+// YouTube Restricted Mode/SafeSearch, завязанный на залогиненный аккаунт,
+// фильтрует такую выдачу для авторизованной сессии, а анонимная — нет.
+// Куки нужны только на шаге получения самого аудиопотока (обход возрастного
+// ограничения), не для поиска/подбора кандидатов.
+function withDefaultArgs(args: string[], useCookies: boolean): string[] {
   const base = ["--js-runtimes", "node", ...args];
-  return env.YTDLP_COOKIES_FILE ? ["--cookies", env.YTDLP_COOKIES_FILE, ...base] : base;
+  return useCookies && env.YTDLP_COOKIES_FILE ? ["--cookies", env.YTDLP_COOKIES_FILE, ...base] : base;
 }
 
-function run(args: string[], timeoutMs: number): Promise<string> {
+function run(args: string[], timeoutMs: number, useCookies = false): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(
       env.YTDLP_PATH,
-      withDefaultArgs(args),
+      withDefaultArgs(args, useCookies),
       { timeout: timeoutMs, maxBuffer: MAX_BUFFER, killSignal: "SIGKILL" },
       (error: ExecFileException | null, stdout, stderr) => {
         if (error) {
@@ -143,7 +147,8 @@ export async function resolveFromUrl(url: string): Promise<Track[]> {
 export async function resolveStreamUrl(url: string): Promise<ResolvedStream> {
   const stdout = await run(
     ["-f", "bestaudio/best", "-j", "--no-warnings", "--no-playlist", url],
-    RESOLVE_TIMEOUT_MS
+    RESOLVE_TIMEOUT_MS,
+    true // куки — только здесь, см. комментарий у withDefaultArgs
   );
   const info = JSON.parse(stdout) as YtDlpFullInfo;
   const chosen = info.requested_downloads?.[0] ?? info;
