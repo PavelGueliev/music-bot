@@ -45,6 +45,17 @@ function run(args: string[], timeoutMs: number): Promise<string> {
       (error: ExecFileException | null, stdout, stderr) => {
         if (error) {
           const timedOut = error.killed;
+          // yt-dlp может выйти с ненулевым кодом уже ПОСЛЕ того, как успешно
+          // напечатал нужный JSON в stdout — например, если не смог
+          // дозаписать обновлённые cookies обратно в файл (реальный кейс:
+          // read-only mount) или споткнулся на второстепенном шаге вроде
+          // превью. Если полезные данные всё же есть — используем их, а не
+          // выбрасываем целиком из-за некритичной хвостовой ошибки.
+          if (!timedOut && stdout.trim().length > 0) {
+            logger.warn({ args, stderr: stderr?.slice(0, 500) }, "yt-dlp вышел с ошибкой, но данные получены — использую их");
+            resolve(stdout);
+            return;
+          }
           logger.warn({ args, timedOut, stderr: stderr?.slice(0, 500) }, "yt-dlp завершился с ошибкой");
           reject(error);
           return;
