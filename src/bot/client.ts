@@ -107,7 +107,7 @@ async function postNowPlaying(client: Client, player: GuildPlayer, track: Track)
     const channel = await client.channels.fetch(player.textChannelId);
     if (!channel || !channel.isSendable()) return;
     await channel.send({
-      embeds: [nowPlayingEmbed(track, player.loopMode, player.volume, player.queue.length, player.autoplay)],
+      embeds: [nowPlayingEmbed(track, player.loopMode, player.volume, player.queue.length, player.autoplay, player.getPositionMs())],
       components: [playerControlsRow(player.guildId, player.isPaused, player.loopMode)],
     });
   } catch (error) {
@@ -159,7 +159,7 @@ async function handleButton(interaction: import("discord.js").ButtonInteraction,
 
   await interaction
     .update({
-      embeds: [nowPlayingEmbed(player.current, player.loopMode, player.volume, player.queue.length, player.autoplay)],
+      embeds: [nowPlayingEmbed(player.current, player.loopMode, player.volume, player.queue.length, player.autoplay, player.getPositionMs())],
       components: [playerControlsRow(player.guildId, player.isPaused, player.loopMode)],
     })
     .catch(() => undefined);

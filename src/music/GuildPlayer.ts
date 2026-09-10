@@ -46,6 +46,13 @@ export class GuildPlayer extends EventEmitter {
   /** Автоплей: когда очередь заканчивается, сам подбираем похожие треки (YouTube Mix) — аналог радио в Spotify. */
   autoplay = false;
 
+  // Позиция внутри текущего трека для /seek и прогресс-бара: playbackBaseMs —
+  // накопленная позиция на момент последнего play()/seek()/pause(), а
+  // playbackStartedAt — когда именно (Date.now()) от неё снова начался
+  // реальный отсчёт. null означает "стоим на паузе, не тикаем".
+  private playbackBaseMs = 0;
+  private playbackStartedAt: number | null = null;
+
   private skipRequested = false;
   private idleTimer: NodeJS.Timeout | null = null;
   private emptyChannelTimer: NodeJS.Timeout | null = null;
@@ -127,6 +134,8 @@ export class GuildPlayer extends EventEmitter {
       this.currentHandle = handle;
       handle.resource.volume?.setVolume(this.volume);
       this.audioPlayer.play(handle.resource);
+      this.playbackBaseMs = 0;
+      this.playbackStartedAt = Date.now();
       this.emit("trackStart", next);
     } catch (error) {
       logger.error({ error, track: next.title }, "Не удалось запустить трек, пропускаю");
@@ -181,15 +190,72 @@ export class GuildPlayer extends EventEmitter {
   }
 
   pause(): boolean {
-    return this.audioPlayer.pause();
+    const ok = this.audioPlayer.pause();
+    if (ok) {
+      this.playbackBaseMs = this.getPositionMs();
+      this.playbackStartedAt = null;
+    }
+    return ok;
   }
 
   resume(): boolean {
-    return this.audioPlayer.unpause();
+    const ok = this.audioPlayer.unpause();
+    if (ok) {
+      this.playbackStartedAt = Date.now();
+    }
+    return ok;
   }
 
   get isPaused(): boolean {
     return this.audioPlayer.state.status === AudioPlayerStatus.Paused;
+  }
+
+  /** Сколько сейчас проиграно текущего трека, в мс. Не тикает на паузе. */
+  getPositionMs(): number {
+    if (this.playbackStartedAt === null) return this.playbackBaseMs;
+    return this.playbackBaseMs + (Date.now() - this.playbackStartedAt);
+  }
+
+  /**
+   * Перемотка: пересоздаёт ffmpeg-поток с нужного момента (см. -ss в
+   * AudioPipeline) и подменяет ресурс на лету — audioPlayer.play() при уже
+   * играющем ресурсе переходит Playing→Playing напрямую, БЕЗ промежуточного
+   * Idle, так что обработчик естественного завершения трека тут не
+   * срабатывает (и не должен — это не конец трека, а перемотка).
+   */
+  async seek(positionMs: number): Promise<boolean> {
+    const track = this.current;
+    if (!track) return false;
+
+    const clamped = Math.max(0, positionMs);
+    const wasPaused = this.isPaused;
+
+    let handle: PlaybackHandle;
+    try {
+      handle = await createPlayback(track, clamped / 1000);
+    } catch (error) {
+      logger.warn({ error, track: track.title }, "Не удалось перемотать трек");
+      return false;
+    }
+
+    // Пока резолвился новый поток, могли остановить/переключить трек —
+    // не подменяем воспроизведение задним числом на уже неактуальное.
+    if (this.current !== track) {
+      handle.destroy();
+      return false;
+    }
+
+    this.currentHandle?.destroy();
+    this.currentHandle = handle;
+    handle.resource.volume?.setVolume(this.volume);
+    this.audioPlayer.play(handle.resource);
+
+    this.playbackBaseMs = clamped;
+    this.playbackStartedAt = wasPaused ? null : Date.now();
+    if (wasPaused) {
+      this.audioPlayer.pause();
+    }
+    return true;
   }
 
   setVolume(percent: number): void {

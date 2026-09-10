@@ -9,7 +9,8 @@ export function nowPlayingEmbed(
   loopMode: LoopMode,
   volume: number,
   queueLength: number,
-  autoplay = false
+  autoplay = false,
+  positionMs = 0
 ): EmbedBuilder {
   return new EmbedBuilder()
     .setColor(COLOR)
@@ -17,7 +18,9 @@ export function nowPlayingEmbed(
     .setTitle(truncate(track.title, 256))
     .setURL(track.url)
     .setThumbnail(track.thumbnail ?? null)
-    .setDescription(`${progressBar(0, track.durationMs)}  \`${formatDuration(track.durationMs)}\``)
+    .setDescription(
+      `${progressBar(positionMs, track.durationMs)}  \`${formatDuration(positionMs)} / ${formatDuration(track.durationMs)}\``
+    )
     .addFields(
       { name: "Повтор", value: loopLabel(loopMode), inline: true },
       { name: "Громкость", value: `${Math.round(volume * 100)}%`, inline: true },

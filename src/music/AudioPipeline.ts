@@ -22,7 +22,7 @@ export interface PlaybackHandle {
  * через @discordjs/opus/libopus) делает уже @discordjs/voice — так мы
  * получаем регулировку громкости (inlineVolume) почти бесплатно по CPU.
  */
-export async function createPlayback(track: Track): Promise<PlaybackHandle> {
+export async function createPlayback(track: Track, startSeconds = 0): Promise<PlaybackHandle> {
   const { streamUrl, headers } = await resolveStreamUrl(track.url);
 
   const headerLines = Object.entries(headers)
@@ -33,6 +33,10 @@ export async function createPlayback(track: Track): Promise<PlaybackHandle> {
     "-reconnect", "1",
     "-reconnect_streamed", "1",
     "-reconnect_delay_max", "5",
+    // -ss ДО -i — это input seek: ffmpeg сразу запрашивает нужный диапазон
+    // по HTTP (Range-запрос) и прыгает к ближайшему кадру, а не decode'ит
+    // и выбрасывает всё до нужной точки. Именно так реализован /seek.
+    ...(startSeconds > 0 ? ["-ss", String(startSeconds)] : []),
     ...(headerLines ? ["-headers", headerLines] : []),
     "-i", streamUrl,
     "-analyzeduration", "0",

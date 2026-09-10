@@ -29,3 +29,26 @@ export function isUrl(text: string): boolean {
     return false;
   }
 }
+
+export type SeekTarget = { type: "absolute"; seconds: number } | { type: "relative"; deltaSeconds: number };
+
+/**
+ * Парсит ввод /seek: "90" (секунды), "1:30" (мм:сс), "1:05:20" (чч:мм:сс),
+ * либо относительно текущей позиции — "+15" / "-15".
+ */
+export function parseSeekInput(input: string): SeekTarget | null {
+  const trimmed = input.trim();
+
+  const relative = /^([+-])\s*(\d+)$/.exec(trimmed);
+  if (relative) {
+    const sign = relative[1] === "-" ? -1 : 1;
+    return { type: "relative", deltaSeconds: sign * Number(relative[2]) };
+  }
+
+  const parts = trimmed.split(":").map((p) => p.trim());
+  if (parts.length === 0 || parts.length > 3 || parts.some((p) => !/^\d+$/.test(p))) {
+    return null;
+  }
+  const seconds = parts.reduce((acc, part) => acc * 60 + Number(part), 0);
+  return { type: "absolute", seconds };
+}

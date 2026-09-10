@@ -17,7 +17,7 @@ export const nowPlayingCommand: Command = {
     }
 
     await interaction.reply({
-      embeds: [nowPlayingEmbed(player!.current, player!.loopMode, player!.volume, player!.queue.length, player!.autoplay)],
+      embeds: [nowPlayingEmbed(player!.current, player!.loopMode, player!.volume, player!.queue.length, player!.autoplay, player!.getPositionMs())],
       components: [playerControlsRow(interaction.guildId!, player!.isPaused, player!.loopMode)],
     });
   },
