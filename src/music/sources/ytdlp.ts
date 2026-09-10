@@ -32,15 +32,23 @@ interface YtDlpFullInfo extends YtDlpFlatEntry {
 // Добавляется в КАЖДЫЙ вызов yt-dlp автоматически (не в отдельных функциях
 // ниже), чтобы ни один вызов случайно не забыл про куки — иначе поведение
 // "то работает, то нет" на возрастных видео было бы трудно отследить.
-function withCookies(args: string[]): string[] {
-  return env.YTDLP_COOKIES_FILE ? ["--cookies", env.YTDLP_COOKIES_FILE, ...args] : args;
+//
+// --js-runtimes node: YouTube требует решать JS-челлендж подписи формата для
+// залогиненных (по кукам) запросов — без этого флага yt-dlp не находит
+// доступный JS-рантайм (даже при наличии node в PATH) и падает с
+// "The page needs to be reloaded" на КАЖДОМ видео, не только возрастных.
+// Node в образе есть всегда (это рантайм самого бота), так что флаг
+// безопасно включать всегда, даже без кук — вреда не будет.
+function withDefaultArgs(args: string[]): string[] {
+  const base = ["--js-runtimes", "node", ...args];
+  return env.YTDLP_COOKIES_FILE ? ["--cookies", env.YTDLP_COOKIES_FILE, ...base] : base;
 }
 
 function run(args: string[], timeoutMs: number): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(
       env.YTDLP_PATH,
-      withCookies(args),
+      withDefaultArgs(args),
       { timeout: timeoutMs, maxBuffer: MAX_BUFFER, killSignal: "SIGKILL" },
       (error: ExecFileException | null, stdout, stderr) => {
         if (error) {
